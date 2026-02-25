@@ -2,14 +2,16 @@ import React, { useState, useCallback } from 'react';
 import JSZip from 'jszip';
 import * as OpenCC from 'opencc-js';
 import { saveAs } from 'file-saver';
-import { Upload, FileText, Download, CheckCircle2, Loader2, AlertCircle, BookOpen } from 'lucide-react';
+import { Upload, FileText, Download, CheckCircle2, Loader2, AlertCircle, BookOpen, ArrowRightLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type ConversionStatus = 'idle' | 'processing' | 'completed' | 'error';
+type ConversionMode = 't2s' | 's2t';
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ConversionStatus>('idle');
+  const [mode, setMode] = useState<ConversionMode>('t2s');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,12 @@ export default function App() {
       const zip = new JSZip();
       const content = await zip.loadAsync(file);
       
-      const converter = OpenCC.Converter({ from: 'hk', to: 'cn' }); // Defaulting to HK/TW to Mainland China
+      // t2s: Traditional to Simplified (hk -> cn)
+      // s2t: Simplified to Traditional (cn -> hk)
+      const converter = OpenCC.Converter({ 
+        from: mode === 't2s' ? 'hk' : 'cn', 
+        to: mode === 't2s' ? 'cn' : 'hk' 
+      });
       
       const fileNames = Object.keys(content.files);
       const totalFiles = fileNames.length;
@@ -68,7 +75,8 @@ export default function App() {
       setProgress(95);
       const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
       
-      const newFileName = file.name.replace(/\.epub$/i, '_简体.epub');
+      const suffix = mode === 't2s' ? '_简体' : '_繁体';
+      const newFileName = file.name.replace(/\.epub$/i, `${suffix}.epub`);
       saveAs(blob, newFileName);
       
       setProgress(100);
@@ -96,16 +104,44 @@ export default function App() {
             <div className="p-2 bg-emerald-600 rounded-xl text-white shadow-lg shadow-emerald-200">
               <BookOpen size={32} />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">EPUB 繁转简</h1>
+            <h1 className="text-4xl font-bold tracking-tight">EPUB 繁简转换</h1>
           </div>
           <p className="text-lg text-zinc-500 max-w-xl">
-            上传您的繁体中文 EPUB 电子书，我们将为您快速转换为简体中文版本。
+            上传您的 EPUB 电子书，我们将为您快速进行繁简转换。
             所有处理均在您的浏览器中完成，保护您的隐私。
           </p>
         </header>
 
         <main>
           <div className="bg-white rounded-3xl shadow-sm border border-zinc-100 p-8 md:p-12">
+            {/* Mode Selector */}
+            {status === 'idle' && (
+              <div className="flex justify-center mb-10">
+                <div className="bg-zinc-100 p-1 rounded-2xl flex gap-1">
+                  <button
+                    onClick={() => setMode('t2s')}
+                    className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      mode === 't2s' 
+                        ? 'bg-white text-emerald-600 shadow-sm' 
+                        : 'text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    繁体 → 简体
+                  </button>
+                  <button
+                    onClick={() => setMode('s2t')}
+                    className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      mode === 's2t' 
+                        ? 'bg-white text-emerald-600 shadow-sm' 
+                        : 'text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    简体 → 繁体
+                  </button>
+                </div>
+              </div>
+            )}
+
             <AnimatePresence mode="wait">
               {status === 'idle' && (
                 <motion.div
@@ -159,7 +195,7 @@ export default function App() {
                         : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}
                     `}
                   >
-                    开始转换
+                    开始{mode === 't2s' ? '繁转简' : '简转繁'}
                   </button>
                 </motion.div>
               )}
@@ -179,7 +215,7 @@ export default function App() {
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-2xl font-bold">正在转换中...</h2>
-                    <p className="text-zinc-500">正在解析章节并进行繁简转换，请稍候</p>
+                    <p className="text-zinc-500">正在进行{mode === 't2s' ? '繁转简' : '简转繁'}转换，请稍候</p>
                     <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden max-w-md mx-auto">
                       <motion.div 
                         className="h-full bg-emerald-600"
@@ -206,7 +242,7 @@ export default function App() {
                   </div>
                   <div className="space-y-4">
                     <h2 className="text-2xl font-bold">转换成功！</h2>
-                    <p className="text-zinc-500">您的简体版 EPUB 已准备就绪，如果下载未自动开始，请点击下方按钮。</p>
+                    <p className="text-zinc-500">您的{mode === 't2s' ? '简体' : '繁体'}版 EPUB 已准备就绪。</p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
                     <button
@@ -217,7 +253,6 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => {
-                        // Re-trigger download if needed, though it's already triggered
                         setError('下载已开始');
                         setTimeout(() => setError(null), 3000);
                       }}
@@ -268,14 +303,14 @@ export default function App() {
               <p className="text-sm text-zinc-500">仅修改文本内容，完美保留原始书籍的封面、目录、样式和图片。</p>
             </div>
             <div className="p-6 bg-white rounded-2xl border border-zinc-100 shadow-sm">
-              <h3 className="font-bold mb-2">智能转换</h3>
-              <p className="text-sm text-zinc-500">使用 OpenCC 转换引擎，支持词汇级别的转换，确保阅读体验自然。</p>
+              <h3 className="font-bold mb-2">双向转换</h3>
+              <p className="text-sm text-zinc-500">支持繁体到简体以及简体到繁体的双向智能转换，满足不同阅读需求。</p>
             </div>
           </div>
         </main>
 
         <footer className="mt-24 text-center text-sm text-zinc-400">
-          <p>© {new Date().getFullYear()} EPUB 繁转简工具 · 纯净无广告</p>
+          <p>© {new Date().getFullYear()} EPUB 繁简转换工具 · 纯净无广告</p>
         </footer>
       </div>
     </div>
